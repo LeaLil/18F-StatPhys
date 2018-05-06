@@ -28,6 +28,7 @@ class MDRun {
     void performStep(std::vector<double>& positions, std::vector<double>& velocities, int nstep, double time);
     void printOutputForStep(const std::vector<double>& positions, const std::vector<double>& velocities, int nstep, double time);
     void printAverages(double time);
+    void performMetropolisalgorithm(std::vector<double>& positions, std::vector<double>& velocities, int nstep, double time);
 
     const MDParameters& par;
     MDRunOutput& output;
@@ -52,6 +53,10 @@ class MDRun {
     int nhpr;
     int nlsq;
     double ekg;
+    const double boltzmannConstant = 8.3144598e-3; // units: K^-1 ps^-2 u nm^2
+    float getRandomNumberForMetropolis() const;
+
+    double computeVelocityScalingFactor() const;
 };
 
 #endif // MDRUN_H

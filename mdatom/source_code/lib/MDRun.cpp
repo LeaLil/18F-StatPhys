@@ -3,13 +3,15 @@
 #include "CenterOfMassCalculator.h"
 #include "TrajectoryFileWriter.h"
 #include <cmath>
+#include <random>
+#include <algorithm>
 
-MDRun::MDRun(const MDParameters& parameters, MDRunOutput& out, TrajectoryFileWriter& trajectoryFileWriter)
-  : par(parameters),
-    output(out),
-    trajectoryWriter(trajectoryFileWriter),
-    forceCalculator(parameters),
-    radialDistribution(parameters.numberRadialDistrPoints, parameters.radialDistrCutoffRadius) {
+MDRun::MDRun(const MDParameters &parameters, MDRunOutput &out, TrajectoryFileWriter &trajectoryFileWriter)
+        : par(parameters),
+          output(out),
+          trajectoryWriter(trajectoryFileWriter),
+          forceCalculator(parameters),
+          radialDistribution(parameters.numberRadialDistrPoints, parameters.radialDistrCutoffRadius) {
 }
 
 void MDRun::run(std::vector<double> &x, std::vector<double> &v) {
@@ -28,14 +30,68 @@ void MDRun::run(std::vector<double> &x, std::vector<double> &v) {
     for (int nstep = 0; nstep < par.numberMDSteps; nstep++) {
         time += par.timeStep;
         performStep(x, v, nstep, time);
+        //performMetropolisalgorithm(x, v, nstep, time);
     }
 
     printAverages(time);
 }
 
+void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vector<double> &velocities, int nstep,
+                                       double time) {
+    /* put atoms in central periodic box */
+    //PeriodicBoundaryConditions::recenterAtoms(par.numberAtoms, positions, par.boxSize);
+
+    //Select random atom to displace. TODO: Is that really what we're supposed to do?
+    int nrOfAtoms = positions.size() / 3;
+    int atomAtXPosition = (rand() % nrOfAtoms) * 3;
+    double coords[3] = {positions.at(atomAtXPosition), positions.at(atomAtXPosition+1), positions.at(atomAtXPosition+2)};
+
+    //Compute current potential energy
+    forceCalculator.calculate(positions, forces);
+    double potentialEnergyOldSystem = forceCalculator.getPotentialEnergy();
+
+    //For metropolis we have to compute y = x_i + r*q. R is supposedly the size of the box
+    bool noAcceptedNewConfiguration = true;
+    while(noAcceptedNewConfiguration) {
+        //random Number between -1 and 1
+        for(int i = 0; i < 3; i++) {
+            //TODO: Choose r s.t. acceptance rate about 0.5
+            double r = 0.10;
+            positions.at(atomAtXPosition+i) = positions.at(atomAtXPosition + i) + r*getRandomNumberForMetropolis();
+        }
+
+        //Compute potentialEnergy of new system
+        PeriodicBoundaryConditions::recenterAtoms(par.numberAtoms, positions, par.boxSize);
+
+        forceCalculator.calculate(positions, forces);
+        double potentialEnergyNewSystem = forceCalculator.getPotentialEnergy();
+        double deltaPotentialEnergy = potentialEnergyNewSystem - potentialEnergyOldSystem;
+
+        //TODO: What's the behavior if T = 0?
+        double probabilityOfGettingAccepted = std::exp(-deltaPotentialEnergy/(boltzmannConstant*(properties[1]/fac)));
+        bool accepted = probabilityOfGettingAccepted > ((double) rand() / (RAND_MAX)) || deltaPotentialEnergy < 0;
+
+        if (accepted) {
+            noAcceptedNewConfiguration = false;
+        } else {
+            //Reset positions for new run
+            for(int i = 0; i < 3; i++) {
+                positions.at(atomAtXPosition+i) = coords[i];
+            }
+        }
+    }
+
+    //Compute stuff in new configuration that we haven't computed yet
+    performStep(positions, velocities,nstep, time);
+
+}
+
+float MDRun::getRandomNumberForMetropolis() const { return -1 + static_cast <double> (rand()) / ( static_cast <double> (RAND_MAX / (2))); }
+
+
 void MDRun::initializeVariables() {
     nat3 = 3 * par.numberAtoms;
-    const double boltzmannConstant = 8.3144598e-3; // units: K^-1 ps^-2 u nm^2
+
     fac = nat3 * boltzmannConstant / 2.;
     ekin0 = fac * par.targetTemperature;
     halfTimeStep = par.timeStep / 2;
@@ -60,7 +116,7 @@ void MDRun::initializeVariables() {
     }
 }
 
-void MDRun::initializeTemperature(const std::vector<double>& velocities) {
+void MDRun::initializeTemperature(const std::vector<double> &velocities) {
     double kineticEnergy = 0;
     for (int j3 = 0; j3 < nat3; j3++) {
         kineticEnergy += velocities[j3] * velocities[j3];
@@ -70,14 +126,13 @@ void MDRun::initializeTemperature(const std::vector<double>& velocities) {
     if (par.mdType == SimulationType::constantTemperature) {
         if (kineticEnergy < 1.e-6) {
             ekg = ekin0;
-        }
-        else {
+        } else {
             ekg = kineticEnergy;
         }
     }
 }
 
-void MDRun::performStep(std::vector<double>& positions, std::vector<double>& velocities, int nstep, double time) {
+void MDRun::performStep(std::vector<double> &positions, std::vector<double> &velocities, int nstep, double time) {
     /* put atoms in central periodic box */
     PeriodicBoundaryConditions::recenterAtoms(par.numberAtoms, positions, par.boxSize);
 
@@ -89,13 +144,7 @@ void MDRun::performStep(std::vector<double>& positions, std::vector<double>& vel
     double vir = forceCalculator.getVirial();
     properties[2] = forceCalculator.getPotentialEnergy();
     properties[3] = vir;
-
-    /* determine velocity scaling factor, when coupling to a bath */
-    double scal = 1;
-    if (par.mdType == SimulationType::constantTemperature) {
-        double dtt = par.timeStep / par.temperatureCouplingTime;
-        scal = std::sqrt(1 + dtt * (ekin0 / ekg - 1));
-    }
+    double scal = computeVelocityScalingFactor();
 
     /* perform leap-frog integration step,
      * calculate kinetic energy at time t-dt/2 and at time t,
@@ -131,7 +180,17 @@ void MDRun::performStep(std::vector<double>& positions, std::vector<double>& vel
     printOutputForStep(positions, velocities, nstep, time);
 }
 
-void MDRun::printOutputForStep(const std::vector<double> &positions, const std::vector<double> &velocities, int nstep, double time) {
+double MDRun::computeVelocityScalingFactor() const {/* determine velocity scaling factor, when coupling to a bath */
+    double scal = 1;
+    if (par.mdType == SimulationType::constantTemperature) {
+        double dtt = par.timeStep / par.temperatureCouplingTime;
+        scal = sqrt(1 + dtt * (ekin0 / ekg - 1));
+    }
+    return scal;
+}
+
+void MDRun::printOutputForStep(const std::vector<double> &positions, const std::vector<double> &velocities, int nstep,
+                               double time) {
     if ((nstep + 1) == (nstep + 1) / par.trajectoryOutputInterval * par.trajectoryOutputInterval) {
         trajectoryWriter.writeOutTrajectoryStep(positions);
     }
@@ -169,6 +228,6 @@ void MDRun::printAverages(double time) {
     output.printAverageAndRMSTemperature(averages[1] / fac, fluctuations[1] / fac);
 }
 
-const AveragedRadialDistribution& MDRun::getRadialDistribution() const {
+const AveragedRadialDistribution &MDRun::getRadialDistribution() const {
     return radialDistribution;
 }
