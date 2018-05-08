@@ -25,39 +25,44 @@ void MDRun::run(std::vector<double> &x, std::vector<double> &v) {
     output.printInitialTemperature(properties[1] / fac);
     output.printIterationStart();
 
+    performStep(x, v, 0, par.initialTime); //Init stuff...
     /* dynamics step */
     double time = par.initialTime;
     for (int nstep = 0; nstep < par.numberMDSteps; nstep++) {
         time += par.timeStep;
-        performStep(x, v, nstep, time);
-        //performMetropolisalgorithm(x, v, nstep, time);
+        //performStep(x, v, nstep, time);
+        performMetropolisalgorithm(x, v, nstep, time);
     }
 
     printAverages(time);
 }
 
 void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vector<double> &velocities, int nstep,
-                                       double time) {
-    /* put atoms in central periodic box */
-    //PeriodicBoundaryConditions::recenterAtoms(par.numberAtoms, positions, par.boxSize);
 
-    //Select random atom to displace. TODO: Is that really what we're supposed to do?
+                                       double time) {
+
+    //Select random atom to displace.
+    // ExTODO: Is that really what we're supposed to do? => Yes, according to "Computer simulations for liquids" by Michael P. Allen
     int nrOfAtoms = positions.size() / 3;
     int atomAtXPosition = (rand() % nrOfAtoms) * 3;
-    double coords[3] = {positions.at(atomAtXPosition), positions.at(atomAtXPosition+1), positions.at(atomAtXPosition+2)};
-
+    double coords[3] = {positions.at(atomAtXPosition), positions.at(atomAtXPosition + 1),
+                        positions.at(atomAtXPosition + 2)};
+    double currentKineticEnergy = properties[1];
     //Compute current potential energy
     forceCalculator.calculate(positions, forces);
     double potentialEnergyOldSystem = forceCalculator.getPotentialEnergy();
 
     //For metropolis we have to compute y = x_i + r*q. R is supposedly the size of the box
     bool noAcceptedNewConfiguration = true;
-    while(noAcceptedNewConfiguration) {
+    //TODO: Choose r s.t. acceptance rate about 0.5
+    double r = 0.10;
+    double nrOfAcceptedConfigurations = 0;
+    double nrOfRejectedConfigurations = 0;
+    while (noAcceptedNewConfiguration) {
         //random Number between -1 and 1
-        for(int i = 0; i < 3; i++) {
-            //TODO: Choose r s.t. acceptance rate about 0.5
-            double r = 0.10;
-            positions.at(atomAtXPosition+i) = positions.at(atomAtXPosition + i) + r*getRandomNumberForMetropolis();
+        for (int i = 0; i < 3; i++) {
+
+            positions.at(atomAtXPosition + i) = positions.at(atomAtXPosition + i) + r * getRandomNumberForMetropolis();
         }
 
         //Compute potentialEnergy of new system
@@ -68,25 +73,56 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
         double deltaPotentialEnergy = potentialEnergyNewSystem - potentialEnergyOldSystem;
 
         //TODO: What's the behavior if T = 0?
-        double probabilityOfGettingAccepted = std::exp(-deltaPotentialEnergy/(boltzmannConstant*(properties[1]/fac)));
+        double probabilityOfGettingAccepted = std::exp(
+                -deltaPotentialEnergy / (boltzmannConstant * (properties[1] / fac)));
         bool accepted = probabilityOfGettingAccepted > ((double) rand() / (RAND_MAX)) || deltaPotentialEnergy < 0;
 
         if (accepted) {
+            nrOfAcceptedConfigurations++;
             noAcceptedNewConfiguration = false;
+            properties[2] = properties[2] - potentialEnergyOldSystem + potentialEnergyNewSystem;
+            radialDistribution.addInstantaneousDistribution(forceCalculator.getInstantaneousRadialDistribution());
+            properties[3] = forceCalculator.getVirial();
+            properties[1] = properties[0] - properties[2]; //New kinetic energy is total energy - new potential energy
+            properties[4] = 2. * (properties[1] - properties[3]) / (vol * 3.);
+            properties[5] = computeVelocityScalingFactor();
+
+            if (par.mdType == SimulationType::constantTemperature) {
+                ekg = currentKineticEnergy;
+            }
+
         } else {
+            nrOfRejectedConfigurations++;
             //Reset positions for new run
-            for(int i = 0; i < 3; i++) {
-                positions.at(atomAtXPosition+i) = coords[i];
+            for (int i = 0; i < 3; i++) {
+                positions.at(atomAtXPosition + i) = coords[i];
+            }
+            double ratioOfAcceptedVsNotAccepted =
+                    nrOfAcceptedConfigurations / (nrOfAcceptedConfigurations + nrOfRejectedConfigurations);
+            if (ratioOfAcceptedVsNotAccepted > 0.55) {
+                r *= 1.05;
+            }else if (ratioOfAcceptedVsNotAccepted < 0.45) {
+                r *= 0.95;
             }
         }
     }
 
+    /* update arrays for averages and fluctuations */
+    for (int m = 0; m < numberProperties; m++) {
+        averages[m] += properties[m];
+        fluctuations[m] += properties[m] * properties[m];
+    }
+
+    printOutputForStep(positions, velocities, nstep, time);
+
     //Compute stuff in new configuration that we haven't computed yet
-    performStep(positions, velocities,nstep, time);
+    //performStep(positions, velocities,nstep, time);
 
 }
 
-float MDRun::getRandomNumberForMetropolis() const { return -1 + static_cast <double> (rand()) / ( static_cast <double> (RAND_MAX / (2))); }
+float MDRun::getRandomNumberForMetropolis() const { return -1 + static_cast <double> (rand()) /
+                                                                (static_cast <double> (RAND_MAX / (2)));
+}
 
 
 void MDRun::initializeVariables() {
@@ -134,6 +170,7 @@ void MDRun::initializeTemperature(const std::vector<double> &velocities) {
 
 void MDRun::performStep(std::vector<double> &positions, std::vector<double> &velocities, int nstep, double time) {
     /* put atoms in central periodic box */
+
     PeriodicBoundaryConditions::recenterAtoms(par.numberAtoms, positions, par.boxSize);
 
     /* calculate forces, potential energy, virial
@@ -144,7 +181,13 @@ void MDRun::performStep(std::vector<double> &positions, std::vector<double> &vel
     double vir = forceCalculator.getVirial();
     properties[2] = forceCalculator.getPotentialEnergy();
     properties[3] = vir;
-    double scal = computeVelocityScalingFactor();
+
+    /* determine velocity scaling factor, when coupling to a bath */
+    double scal = 1;
+    if (par.mdType == SimulationType::constantTemperature) {
+        double dtt = par.timeStep / par.temperatureCouplingTime;
+        scal = std::sqrt(1 + dtt * (ekin0 / ekg - 1));
+    }
 
     /* perform leap-frog integration step,
      * calculate kinetic energy at time t-dt/2 and at time t,
