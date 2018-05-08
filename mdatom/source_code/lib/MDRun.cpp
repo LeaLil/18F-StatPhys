@@ -55,9 +55,7 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
     //For metropolis we have to compute y = x_i + r*q. R is supposedly the size of the box
     bool noAcceptedNewConfiguration = true;
     //TODO: Choose r s.t. acceptance rate about 0.5
-    double r = 0.10;
-    double nrOfAcceptedConfigurations = 0;
-    double nrOfRejectedConfigurations = 0;
+
     while (noAcceptedNewConfiguration) {
         //random Number between -1 and 1
         for (int i = 0; i < 3; i++) {
@@ -97,14 +95,15 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
             for (int i = 0; i < 3; i++) {
                 positions.at(atomAtXPosition + i) = coords[i];
             }
-            double ratioOfAcceptedVsNotAccepted =
-                    nrOfAcceptedConfigurations / (nrOfAcceptedConfigurations + nrOfRejectedConfigurations);
-            if (ratioOfAcceptedVsNotAccepted > 0.55) {
-                r *= 1.05;
-            }else if (ratioOfAcceptedVsNotAccepted < 0.45) {
-                r *= 0.95;
-            }
+
         }
+    }
+    double ratioOfAcceptedVsNotAccepted =
+            nrOfAcceptedConfigurations / (nrOfAcceptedConfigurations + nrOfRejectedConfigurations);
+    if (ratioOfAcceptedVsNotAccepted > 0.55) {
+        r *= 1.05;
+    }else if (ratioOfAcceptedVsNotAccepted < 0.45) {
+        r *= 0.95;
     }
 
     /* update arrays for averages and fluctuations */
