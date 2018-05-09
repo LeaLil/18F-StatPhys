@@ -25,7 +25,7 @@ void MDRun::run(std::vector<double> &x, std::vector<double> &v) {
     output.printInitialTemperature(properties[1] / fac);
     output.printIterationStart();
 
-    performStep(x, v, 0, par.initialTime); //Init stuff...
+    //performStep(x, v, 0, par.initialTime); //Init stuff...
     /* dynamics step */
     double time = par.initialTime;
     for (int nstep = 0; nstep < par.numberMDSteps; nstep++) {
@@ -78,23 +78,19 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
         if (accepted) {
             nrOfAcceptedConfigurations++;
             noAcceptedNewConfiguration = false;
-            properties[2] = properties[2] - potentialEnergyOldSystem + potentialEnergyNewSystem; //potential Energy
-            radialDistribution.addInstantaneousDistribution(forceCalculator.getInstantaneousRadialDistribution());
+
+            //properties[2] = properties[2] - potentialEnergyOldSystem + potentialEnergyNewSystem; //potential Energy
+            properties[2] =  potentialEnergyNewSystem;
+                    radialDistribution.addInstantaneousDistribution(forceCalculator.getInstantaneousRadialDistribution());
             properties[3] = forceCalculator.getVirial();
             properties[5] = computeVelocityScalingFactor();
 
-            double oldKineticEnergy;
-            double newKineticEnergy;
-            performLeapFrog(properties[5], positions, velocities, oldKineticEnergy, newKineticEnergy);
+            //TODO: Kinetic energy constant due to constant temperature?
 
-            properties[1] = newKineticEnergy; //New kinetic energy is total energy - new potential energy
             properties[4] = 2. * (properties[1] - properties[3]) / (vol * 3.);
             properties[0] = properties[1] + properties[2];
 
 
-            if (par.mdType == SimulationType::constantTemperature) {
-                ekg = currentKineticEnergy;
-            }
 
         } else {
             nrOfRejectedConfigurations++;
