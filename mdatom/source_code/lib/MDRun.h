@@ -8,6 +8,7 @@
 #include "InteractionCalculator.h"
 #include <array>
 
+#include <tuple>
 /*!
  * This class is the core of a MD simulation.
  * Its run function contains a loop that propagates the atoms according to the options specified in the parameters.
@@ -61,6 +62,9 @@ class MDRun {
     float getRandomNumberForMetropolis() const;
 
     double computeVelocityScalingFactor() const;
+
+    void performLeapFrog(double scal, std::vector<double> &positions, std::vector<double> &velocities, double &oldKineticEnergy,
+                    double &newKineticEnergy) const;
 };
 
 #endif // MDRUN_H

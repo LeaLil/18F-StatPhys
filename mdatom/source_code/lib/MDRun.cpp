@@ -59,7 +59,6 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
     while (noAcceptedNewConfiguration) {
         //random Number between -1 and 1
         for (int i = 0; i < 3; i++) {
-
             positions.at(atomAtXPosition + i) = positions.at(atomAtXPosition + i) + r * getRandomNumberForMetropolis();
         }
 
@@ -70,20 +69,28 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
         double potentialEnergyNewSystem = forceCalculator.getPotentialEnergy();
         double deltaPotentialEnergy = potentialEnergyNewSystem - potentialEnergyOldSystem;
 
-        //TODO: What's the behavior if T = 0?
+        //exTODO: What's the behavior if T = 0? -> Obviously nothing is moving at T = 0
         double probabilityOfGettingAccepted = std::exp(
-                -deltaPotentialEnergy / (boltzmannConstant * (properties[1] / fac)));
+                -deltaPotentialEnergy / (boltzmannConstant * (par.targetTemperature))); //WE assume that temperature is constant, so shouldn't be an issue.
+
         bool accepted = probabilityOfGettingAccepted > ((double) rand() / (RAND_MAX)) || deltaPotentialEnergy < 0;
 
         if (accepted) {
             nrOfAcceptedConfigurations++;
             noAcceptedNewConfiguration = false;
-            properties[2] = properties[2] - potentialEnergyOldSystem + potentialEnergyNewSystem;
+            properties[2] = properties[2] - potentialEnergyOldSystem + potentialEnergyNewSystem; //potential Energy
             radialDistribution.addInstantaneousDistribution(forceCalculator.getInstantaneousRadialDistribution());
             properties[3] = forceCalculator.getVirial();
-            properties[1] = properties[0] - properties[2]; //New kinetic energy is total energy - new potential energy
-            properties[4] = 2. * (properties[1] - properties[3]) / (vol * 3.);
             properties[5] = computeVelocityScalingFactor();
+
+            double oldKineticEnergy;
+            double newKineticEnergy;
+            performLeapFrog(properties[5], positions, velocities, oldKineticEnergy, newKineticEnergy);
+
+            properties[1] = newKineticEnergy; //New kinetic energy is total energy - new potential energy
+            properties[4] = 2. * (properties[1] - properties[3]) / (vol * 3.);
+            properties[0] = properties[1] + properties[2];
+
 
             if (par.mdType == SimulationType::constantTemperature) {
                 ekg = currentKineticEnergy;
@@ -187,23 +194,10 @@ void MDRun::performStep(std::vector<double> &positions, std::vector<double> &vel
         double dtt = par.timeStep / par.temperatureCouplingTime;
         scal = std::sqrt(1 + dtt * (ekin0 / ekg - 1));
     }
+    double oldKineticEnergy;
+    double newKineticEnergy;
+    performLeapFrog(scal, positions, velocities, oldKineticEnergy, newKineticEnergy);
 
-    /* perform leap-frog integration step,
-     * calculate kinetic energy at time t-dt/2 and at time t,
-     * and calculate pressure
-     */
-    double oldKineticEnergy = 0.;
-    double newKineticEnergy = 0.;
-    for (int j3 = 0; j3 < nat3; j3++) {
-        double oldVelocity = velocities[j3];
-        double newVelocity = (oldVelocity + forces[j3] * dtm) * scal;
-        oldKineticEnergy += newVelocity * newVelocity;
-        newKineticEnergy += (oldVelocity + newVelocity) * (oldVelocity + newVelocity);
-        velocities[j3] = newVelocity;
-        positions[j3] += newVelocity * par.timeStep;
-    }
-    oldKineticEnergy *= (par.atomicMass / 2.);
-    newKineticEnergy *= (par.atomicMass / 8.);
     properties[1] = newKineticEnergy;
     properties[0] = properties[1] + properties[2];
     double pres = 2. * (newKineticEnergy - vir) / (vol * 3.);
@@ -220,6 +214,24 @@ void MDRun::performStep(std::vector<double> &positions, std::vector<double> &vel
     }
 
     printOutputForStep(positions, velocities, nstep, time);
+}
+
+void MDRun::performLeapFrog(double scal, std::vector<double> &positions, std::vector<double> &velocities,
+                            double &oldKineticEnergy, double &newKineticEnergy) const {
+    oldKineticEnergy= 0.;
+    newKineticEnergy= 0.;/* perform leap-frog integration step,
+     * calculate kinetic energy at time t-dt/2 and at time t,
+     * and calculate pressure
+     */for (int j3 = 0; j3 < nat3; j3++) {
+        double oldVelocity = velocities[j3];
+        double newVelocity = (oldVelocity + forces[j3] * dtm) * scal;
+        oldKineticEnergy += newVelocity * newVelocity;
+        newKineticEnergy += (oldVelocity + newVelocity) * (oldVelocity + newVelocity);
+        velocities[j3] = newVelocity;
+        positions[j3] += newVelocity * par.timeStep;
+    }
+    oldKineticEnergy *= (par.atomicMass / 2.);
+    newKineticEnergy *= (par.atomicMass / 8.);
 }
 
 double MDRun::computeVelocityScalingFactor() const {/* determine velocity scaling factor, when coupling to a bath */
