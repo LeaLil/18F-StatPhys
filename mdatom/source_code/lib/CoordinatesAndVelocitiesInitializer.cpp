@@ -12,7 +12,7 @@ CoordinatesAndVelocitiesInitializer::CoordinatesAndVelocitiesInitializer(MDRunOu
 }
 
 void CoordinatesAndVelocitiesInitializer::initialize(std::vector<double>& positions, std::vector<double>& velocities) {
-    output.printXVInitializationHeader();
+    //output.printXVInitializationHeader();
 
     if (par.xvInitialization != InitialXVGenerator::generateInitialX) {
         fin.open(fileName, std::ios::in);
@@ -30,7 +30,7 @@ void CoordinatesAndVelocitiesInitializer::initialize(std::vector<double>& positi
     switch (par.xvInitialization) {
         case InitialXVGenerator::generateInitialX:
             generateAtomicConfiguration(positions);
-            output.printXInitializationWithLattice();
+            //output.printXInitializationWithLattice();
             for (int j3 = 0; j3 < nat3; j3++) {
                 velocities[j3] = 0;
             }
@@ -40,7 +40,7 @@ void CoordinatesAndVelocitiesInitializer::initialize(std::vector<double>& positi
             getline(fin,title1);
             int natom;
             fin >> natom;
-            output.printCoordinateFileTitle(title1);
+            //output.printCoordinateFileTitle(title1);
             fin.get();
             if (natom < par.numberAtoms) {
                 throw std::runtime_error("NATOM (" + fileName + ") = " + std::to_string(natom) + " < NAT");
@@ -100,7 +100,7 @@ void CoordinatesAndVelocitiesInitializer::initialize(std::vector<double>& positi
      * take the velocities from a maxwellian, when required
      */
     if (par.initialTemperature >= 1e-6) {
-        output.printVInitializationWithMaxwellianDistribution();
+        //output.printVInitializationWithMaxwellianDistribution();
         const double boltzmannConstant = 8.3144598e-3; // units: K^-1 ps^-2 u nm^2
         double sd = sqrt(boltzmannConstant * par.initialTemperature / par.atomicMass);
         for (int j3 = 0; j3 < nat3; j3++) {

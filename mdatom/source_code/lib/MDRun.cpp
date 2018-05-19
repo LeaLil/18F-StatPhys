@@ -22,23 +22,30 @@ void MDRun::run(std::vector<double> &x, std::vector<double> &v) {
     initializeVariables();
     initializeTemperature(v);
 
-    output.printInitialTemperature(properties[1] / fac);
-    output.printIterationStart();
+    //output.printInitialTemperature(properties[1] / fac);
+    //output.printIterationStart();
 
-    //performStep(x, v, 0, par.initialTime); //Init stuff...
     /* dynamics step */
     double time = par.initialTime;
+    //std::cout << "Metropolis" << std::endl;
+    //std::cout << "Normal" << std::endl;
     for (int nstep = 0; nstep < par.numberMDSteps; nstep++) {
         time += par.timeStep;
-        //performStep(x, v, nstep, time);
-        performMetropolisalgorithm(x, v, nstep, time);
+        if (par.isMonteCarlo) {
+            performMetropolisalgorithm(x, v, nstep, time);
+        } else {
+            performStep(x, v, nstep, time);
+
+        }
+
     }
 
-    printAverages(time);
+  //  std::cout << "Accepted: " << nrOfAcceptedConfigurations << " Not: " << nrOfRejectedConfigurations;
+
+//printAverages(time);
 }
 
 void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vector<double> &velocities, int nstep,
-
                                        double time) {
 
     //Select random atom to displace.
@@ -47,7 +54,9 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
     int atomAtXPosition = (rand() % nrOfAtoms) * 3;
     double coords[3] = {positions.at(atomAtXPosition), positions.at(atomAtXPosition + 1),
                         positions.at(atomAtXPosition + 2)};
-    double currentKineticEnergy = properties[1];
+
+    //Kinetic energy is irrelevant too
+    properties[1] = 0;
     //Compute current potential energy
     forceCalculator.calculate(positions, forces);
     double potentialEnergyOldSystem = forceCalculator.getPotentialEnergy();
@@ -55,11 +64,17 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
     //For metropolis we have to compute y = x_i + r*q. R is supposedly the size of the box
     bool noAcceptedNewConfiguration = true;
     //TODO: Choose r s.t. acceptance rate about 0.5
+    double deltaPotEnergy;
+
+    std::mt19937 gen(42);
+    std::uniform_real_distribution<double> test(0,1);
+    std::uniform_real_distribution<double> step(-1,1);
+
 
     while (noAcceptedNewConfiguration) {
         //random Number between -1 and 1
         for (int i = 0; i < 3; i++) {
-            positions.at(atomAtXPosition + i) = positions.at(atomAtXPosition + i) + r * getRandomNumberForMetropolis();
+            positions.at(atomAtXPosition + i) = positions.at(atomAtXPosition + i) + r * step(gen);
         }
 
         //Compute potentialEnergy of new system
@@ -67,29 +82,23 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
 
         forceCalculator.calculate(positions, forces);
         double potentialEnergyNewSystem = forceCalculator.getPotentialEnergy();
-        double deltaPotentialEnergy = potentialEnergyNewSystem - potentialEnergyOldSystem;
+
+        deltaPotEnergy = potentialEnergyNewSystem - potentialEnergyOldSystem;
 
         //exTODO: What's the behavior if T = 0? -> Obviously nothing is moving at T = 0
         double probabilityOfGettingAccepted = std::exp(
-                -deltaPotentialEnergy / (boltzmannConstant * (par.targetTemperature))); //WE assume that temperature is constant, so shouldn't be an issue.
+                -deltaPotEnergy / (boltzmannConstant *par.targetTemperature)); //WE assume that temperature is constant, so shouldn't be an issue.
 
-        bool accepted = probabilityOfGettingAccepted > ((double) rand() / (RAND_MAX)) || deltaPotentialEnergy < 0;
+        bool accepted = probabilityOfGettingAccepted > test(gen) || deltaPotEnergy <= 0;
 
         if (accepted) {
             nrOfAcceptedConfigurations++;
             noAcceptedNewConfiguration = false;
 
-            //properties[2] = properties[2] - potentialEnergyOldSystem + potentialEnergyNewSystem; //potential Energy
-            properties[2] =  potentialEnergyNewSystem;
-                    radialDistribution.addInstantaneousDistribution(forceCalculator.getInstantaneousRadialDistribution());
+            properties[2] = potentialEnergyNewSystem; //potential Energy
+
+            radialDistribution.addInstantaneousDistribution(forceCalculator.getInstantaneousRadialDistribution());
             properties[3] = forceCalculator.getVirial();
-            properties[5] = computeVelocityScalingFactor();
-
-            //TODO: Kinetic energy constant due to constant temperature?
-
-            properties[4] = 2. * (properties[1] - properties[3]) / (vol * 3.);
-            properties[0] = properties[1] + properties[2];
-
 
 
         } else {
@@ -103,28 +112,20 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
     }
     double ratioOfAcceptedVsNotAccepted =
             nrOfAcceptedConfigurations / (nrOfAcceptedConfigurations + nrOfRejectedConfigurations);
+
     if (ratioOfAcceptedVsNotAccepted > 0.55) {
         r *= 1.05;
-    }else if (ratioOfAcceptedVsNotAccepted < 0.45) {
+    } else if (ratioOfAcceptedVsNotAccepted < 0.45) {
         r *= 0.95;
     }
 
-    /* update arrays for averages and fluctuations */
-    for (int m = 0; m < numberProperties; m++) {
-        averages[m] += properties[m];
-        fluctuations[m] += properties[m] * properties[m];
+
+    if (!par.showDistributionInsteadOfCSV) {
+        std::cout << nstep << "," << properties[2] << "," << deltaPotEnergy << "," << r << std::endl;
+
     }
-
-    printOutputForStep(positions, velocities, nstep, time);
-
-    //Compute stuff in new configuration that we haven't computed yet
-    //performStep(positions, velocities,nstep, time);
-
 }
 
-float MDRun::getRandomNumberForMetropolis() const { return -1 + static_cast <double> (rand()) /
-                                                                (static_cast <double> (RAND_MAX / (2)));
-}
 
 
 void MDRun::initializeVariables() {
@@ -174,7 +175,7 @@ void MDRun::performStep(std::vector<double> &positions, std::vector<double> &vel
     /* put atoms in central periodic box */
 
     PeriodicBoundaryConditions::recenterAtoms(par.numberAtoms, positions, par.boxSize);
-
+    double currentPotEnergy = forceCalculator.getPotentialEnergy();
     /* calculate forces, potential energy, virial
      * and contribution to the radial distribution function
      */
@@ -209,13 +210,17 @@ void MDRun::performStep(std::vector<double> &positions, std::vector<double> &vel
         fluctuations[m] += properties[m] * properties[m];
     }
 
-    printOutputForStep(positions, velocities, nstep, time);
+    //printOutputForStep(positions, velocities, nstep, time)
+    if (!par.showDistributionInsteadOfCSV) {
+        std::cout << nstep << "," << properties[2] << "," << (properties[2] - currentPotEnergy) << std::endl;
+    }
+
 }
 
 void MDRun::performLeapFrog(double scal, std::vector<double> &positions, std::vector<double> &velocities,
                             double &oldKineticEnergy, double &newKineticEnergy) const {
-    oldKineticEnergy= 0.;
-    newKineticEnergy= 0.;/* perform leap-frog integration step,
+    oldKineticEnergy = 0.;
+    newKineticEnergy = 0.;/* perform leap-frog integration step,
      * calculate kinetic energy at time t-dt/2 and at time t,
      * and calculate pressure
      */for (int j3 = 0; j3 < nat3; j3++) {
@@ -239,6 +244,9 @@ double MDRun::computeVelocityScalingFactor() const {/* determine velocity scalin
     return scal;
 }
 
+
+
+
 void MDRun::printOutputForStep(const std::vector<double> &positions, const std::vector<double> &velocities, int nstep,
                                double time) {
     if ((nstep + 1) == (nstep + 1) / par.trajectoryOutputInterval * par.trajectoryOutputInterval) {
@@ -252,6 +260,7 @@ void MDRun::printOutputForStep(const std::vector<double> &positions, const std::
     if ((nstep + 1) == (nstep + 1) / par.propertyPrintingInterval * par.propertyPrintingInterval || nstep == 0) {
         output.printProperties(nstep, time, properties);
     }
+
 
     /* calculate and print center of mass motion
      * once in nlsq steps, at time t-dt/2

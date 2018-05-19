@@ -9,6 +9,8 @@
 #include <array>
 
 #include <tuple>
+#include <functional>
+
 /*!
  * This class is the core of a MD simulation.
  * Its run function contains a loop that propagates the atoms according to the options specified in the parameters.
@@ -29,7 +31,8 @@ class MDRun {
     void performStep(std::vector<double>& positions, std::vector<double>& velocities, int nstep, double time);
     void printOutputForStep(const std::vector<double>& positions, const std::vector<double>& velocities, int nstep, double time);
     void printAverages(double time);
-    void performMetropolisalgorithm(std::vector<double>& positions, std::vector<double>& velocities, int nstep, double time);
+    void performMetropolisalgorithm(std::vector<double>& positions, std::vector<double>& velocities, int nstep, double time) ;
+    void printRadialDistribution(const AveragedRadialDistribution &radialDistribution);
 
     const MDParameters& par;
     MDRunOutput& output;

@@ -27,8 +27,8 @@ void MDSimulation::performSimulation(const MDParameters& par, const std::string&
 void MDSimulation::prepareRun() {
     RandomNumberGenerator::setSeed(parameters.randomSeed);
     timer.programStart();
-    output.printHeader();
-    output.printParameters(parameters);
+    //output.printHeader();
+    //output.printParameters(parameters);
 }
 
 void MDSimulation::checkParameterValidity() {
@@ -45,15 +45,18 @@ void MDSimulation::initializeCoordinatesAndVelocities(const std::string& coordin
 
 void MDSimulation::executeMDIterations() {
     TrajectoryFileWriter trajectoryWriter(parameters, "coords.final", "coords.traj");
-    trajectoryWriter.writeBeforeRun();
+    //trajectoryWriter.writeBeforeRun();
 
     timer.mdStart();
     MDRun mdRun(parameters, output, trajectoryWriter);
     mdRun.run(positions, velocities);
     timer.mdEnd();
 
-    printRadialDistribution(mdRun.getRadialDistribution());
-    trajectoryWriter.writeFinalCoordinates(positions, velocities);
+    if(parameters.showDistributionInsteadOfCSV){
+        printRadialDistribution(mdRun.getRadialDistribution());
+
+    }
+    //trajectoryWriter.writeFinalCoordinates(positions, velocities);
 }
 
 void MDSimulation::printRadialDistribution(const AveragedRadialDistribution &radialDistribution) {

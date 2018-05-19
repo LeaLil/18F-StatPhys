@@ -55,6 +55,8 @@ struct MDParameters {
     int numberRadialDistrPoints;
     double radialDistrCutoffRadius;
     bool trajectoryOutput;
+    bool isMonteCarlo;
+    bool showDistributionInsteadOfCSV;
     TrajectoryFileFormat trajectoryOutputFormat;
     int trajectoryOutputInterval;
 };

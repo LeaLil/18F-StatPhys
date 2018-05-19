@@ -75,6 +75,10 @@ MDParameters ParameterIO::readParameters(const std::string &fileName) {
         >> ntpw
         >> par.trajectoryOutputInterval;
 
+    fin.ignore();
+    getline(fin, dummy);
+    fin >> par.isMonteCarlo >> par.showDistributionInsteadOfCSV;
+
     par.xvInitialization = initialXVGeneratorFromInt(ntxi);
     par.finalXVOutput = finalCoordinateFileFormatFromInt(ntxo);
     par.trajectoryOutput = ntwxm > 0;

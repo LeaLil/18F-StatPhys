@@ -1,14 +1,11 @@
 # 18F-StatPhys
-Project 6.7 - Other simulation methods 
-
-
-Other methods that may be used to simulate the behavior of liquid systems are the
+Project 6.7 - Other simulationThe coordinates may be used to simulate the behavior of liquid systems are the
 Monte Carlo (MC) method, which only yields static properties, and the method of
 Stochastic Dynamics (SD), which is an extension of the MD method.
 
 ## Monte Carlo of simple liquids: 1 particle moves
 The usual MC method to simulate simple liquids is the Metropolis method [16].
-Given a starting configuration of an N atom system, a new configuration is generated
+Given a stariting configuration of an N atom system, a new configuration is generated
 by random displacement of one or more atoms. The displacements should be such
 that in the limit of a large number of successive displacements the available Cartesian
 space of all atoms is homogeneously sampled. The newly generated configuration is

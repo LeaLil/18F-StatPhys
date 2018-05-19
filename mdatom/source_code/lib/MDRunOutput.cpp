@@ -118,15 +118,14 @@ void MDRunOutput::printCoordinateFileTitle(const std::string &title) {
 }
 
 void MDRunOutput::printTiming(const Timer &timer) {
-    timer.output(out);
+    //timer.output(out);
 }
 
 void MDRunOutput::printRadialDistribution(int nPoints, double binSize, double points[]) {
-    out << "\n\n Radial distribution function g(R) :\n\n"
-        << "        R             g(R)\n";
+
     for (int n = 0; n < nPoints; n++) {
-        out << setw(10) << (n + 0.5) * binSize ;
-        out << setw(15) << points[n] << "\n";
+        out << (n + 0.5) * binSize ;
+        out << "," << points[n] << "\n";
     }
     out << "\n\n" ;
 }

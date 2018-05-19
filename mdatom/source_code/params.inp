@@ -1,4 +1,4 @@
-# Title
+# Title_
 Test 6, 1000 atoms
 #                 NumberAtoms                 AtomicMass                     MDType
                          1000                          1                          1
@@ -20,3 +20,5 @@ Test 6, 1000 atoms
                             1                        100                        2.5
 #            TrajectoryOutput     TrajectoryOutputFormat   TrajectoryOutputInterval
                             0                          2                          5
+#                  Metropolis          RadialDistribution
+                            1                           1
