@@ -21,4 +21,4 @@ Test 6, 1000 atoms
 #            TrajectoryOutput     TrajectoryOutputFormat   TrajectoryOutputInterval
                             0                          2                          5
 #                  Metropolis          RadialDistribution                         R
-                            1                           1                          0.1
+                            1                           0                          0.065

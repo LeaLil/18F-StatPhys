@@ -59,7 +59,7 @@ struct MDParameters {
     bool showDistributionInsteadOfCSV;
     TrajectoryFileFormat trajectoryOutputFormat;
     int trajectoryOutputInterval;
-    double r;
+    double delta_r; // step size for Metropolis MC
 };
 
 FinalCoordinateFileFormat finalCoordinateFileFormatFromInt(int ntxo);

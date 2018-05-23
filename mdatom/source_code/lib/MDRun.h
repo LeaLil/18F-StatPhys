@@ -31,7 +31,7 @@ class MDRun {
     void performStep(std::vector<double>& positions, std::vector<double>& velocities, int nstep, double time);
     void printOutputForStep(const std::vector<double>& positions, const std::vector<double>& velocities, int nstep, double time);
     void printAverages(double time);
-    void performMetropolisalgorithm(std::vector<double>& positions, std::vector<double>& velocities, int nstep, double time) ;
+    void performMetropolisStep(std::vector<double>& positions, std::vector<double>& velocities, int nstep, double time, bool MConeParticleOnly) ;
     void printRadialDistribution(const AveragedRadialDistribution &radialDistribution);
 
     const MDParameters& par;
