@@ -58,7 +58,7 @@ class MDRun {
     int nlsq;
     double ekg;
     const double boltzmannConstant = 8.3144598e-3; // units: K^-1 ps^-2 u nm^2
-    double r = 0.10;
+    double r = 0.1;
     double nrOfAcceptedConfigurations = 0;
     double nrOfRejectedConfigurations = 0;
 

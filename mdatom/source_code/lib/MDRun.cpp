@@ -50,31 +50,30 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
 
     //Select random atom to displace.
     // ExTODO: Is that really what we're supposed to do? => Yes, according to "Computer simulations for liquids" by Michael P. Allen
-    int nrOfAtoms = positions.size() / 3;
-    int atomAtXPosition = (rand() % nrOfAtoms) * 3;
+    int atomAtXPosition = (rand() % par.numberAtoms) * 3;
     double coords[3] = {positions.at(atomAtXPosition), positions.at(atomAtXPosition + 1),
                         positions.at(atomAtXPosition + 2)};
 
-    //Kinetic energy is irrelevant too
-    properties[1] = 0;
     //Compute current potential energy
     forceCalculator.calculate(positions, forces);
     double potentialEnergyOldSystem = forceCalculator.getPotentialEnergy();
 
-    //For metropolis we have to compute y = x_i + r*q. R is supposedly the size of the box
     bool noAcceptedNewConfiguration = true;
-    //TODO: Choose r s.t. acceptance rate about 0.5
     double deltaPotEnergy;
 
     std::mt19937 gen(42);
     std::uniform_real_distribution<double> test(0,1);
     std::uniform_real_distribution<double> step(-1,1);
 
-
+    std::vector<double> currentPositions(positions);
+    
     while (noAcceptedNewConfiguration) {
+
+        //For metropolis we have to compute y = x_i + r*q.
         //random Number between -1 and 1
-        for (int i = 0; i < 3; i++) {
-            positions.at(atomAtXPosition + i) = positions.at(atomAtXPosition + i) + r * step(gen);
+        for (int i = 0; i < positions.size(); i++) {
+
+            positions.at(i) = positions.at(i) + par.r * step(gen);
         }
 
         //Compute potentialEnergy of new system
@@ -104,8 +103,8 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
         } else {
             nrOfRejectedConfigurations++;
             //Reset positions for new run
-            for (int i = 0; i < 3; i++) {
-                positions.at(atomAtXPosition + i) = coords[i];
+            for(int i = 0; i < currentPositions.size(); i++) {
+                positions.at(i) = currentPositions.at(i);
             }
 
         }
@@ -113,15 +112,16 @@ void MDRun::performMetropolisalgorithm(std::vector<double> &positions, std::vect
     double ratioOfAcceptedVsNotAccepted =
             nrOfAcceptedConfigurations / (nrOfAcceptedConfigurations + nrOfRejectedConfigurations);
 
-    if (ratioOfAcceptedVsNotAccepted > 0.55) {
-        r *= 1.05;
-    } else if (ratioOfAcceptedVsNotAccepted < 0.45) {
-        r *= 0.95;
-    }
+    /*
+    if (ratioOfAcceptedVsNotAccepted > 0.51) {
+        r *= 1.01;
+    } else if (ratioOfAcceptedVsNotAccepted < 0.49) {
+        r *= 0.99;
+    }*/
 
 
     if (!par.showDistributionInsteadOfCSV) {
-        std::cout << nstep << "," << properties[2] << "," << deltaPotEnergy << "," << r << std::endl;
+        std::cout << nstep << "," << properties[2] << "," << deltaPotEnergy << "," << par.r << "," << ratioOfAcceptedVsNotAccepted << std::endl;
 
     }
 }

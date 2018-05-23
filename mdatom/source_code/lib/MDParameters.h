@@ -59,6 +59,7 @@ struct MDParameters {
     bool showDistributionInsteadOfCSV;
     TrajectoryFileFormat trajectoryOutputFormat;
     int trajectoryOutputInterval;
+    double r;
 };
 
 FinalCoordinateFileFormat finalCoordinateFileFormatFromInt(int ntxo);
