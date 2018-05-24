@@ -21,11 +21,17 @@ void MDRun::run(std::vector<double> &x, std::vector<double> &v) {
 
     initializeVariables();
     initializeTemperature(v);
-
     //output.printInitialTemperature(properties[1] / fac);
     //output.printIterationStart();
 
     bool MConeParticleOnly = true; // This is a hack; needs proper parametrisation
+
+    //Recenter atoms if necessary (e.g. if coords.inp has coordinates on the outside of our box)
+    PeriodicBoundaryConditions::recenterAtoms(par.numberAtoms, x, par.boxSize);
+    forceCalculator.calculate(x, v);
+    properties[2] = forceCalculator.getPotentialEnergy();
+
+
 
     /* dynamics step */
     double time = par.initialTime;
@@ -42,12 +48,14 @@ void MDRun::run(std::vector<double> &x, std::vector<double> &v) {
 
     }
 
-  //  std::cout << "Accepted: " << nrOfAcceptedConfigurations << " Not: " << nrOfRejectedConfigurations;
+    //  std::cout << "Accepted: " << nrOfAcceptedConfigurations << " Not: " << nrOfRejectedConfigurations;
 
 //printAverages(time);
 }
 
-void MDRun::performMetropolisStep(std::vector<double> &positions, std::vector<double> &velocities, int nstep, double time, bool MConeParticleOnly) {
+void
+MDRun::performMetropolisStep(std::vector<double> &positions, std::vector<double> &velocities, int nstep, double time,
+                             bool MConeParticleOnly) {
 
 
     int atomPositionStart = 0;
@@ -56,18 +64,17 @@ void MDRun::performMetropolisStep(std::vector<double> &positions, std::vector<do
     // Restrict range for changing positions to 1 atom if (oneParticleOnly)
     // otherwise we'll change positions of all (presumably N) atoms
     if (MConeParticleOnly) {
-      //Select random atom to displace.
-      // ExTODO: Is that really what we're supposed to do? => Yes, according to "Computer simulations for liquids" by Michael P. Allen
-      atomPositionStart = (rand() % par.numberAtoms) * 3;
-      atomPositionRange = atomPositionStart + 3;
-      // double coords[3] = {positions.at(atomAtXPosition),
-      //                     positions.at(atomAtXPosition + 1),
-      //                     positions.at(atomAtXPosition + 2)};
+        //Select random atom to displace.
+        // ExTODO: Is that really what we're supposed to do? => Yes, according to "Computer simulations for liquids" by Michael P. Allen
+        atomPositionStart = (rand() % par.numberAtoms) * 3;
+        atomPositionRange = atomPositionStart + 3;
+        // double coords[3] = {positions.at(atomAtXPosition),
+        //                     positions.at(atomAtXPosition + 1),
+        //                     positions.at(atomAtXPosition + 2)};
     }
 
-    //Compute current potential energy
-    forceCalculator.calculate(positions, forces);
-    double potentialEnergyPreMCStep = forceCalculator.getPotentialEnergy();
+    //current potential energy
+    double potentialEnergyPreMCStep = properties[2];
 
     //Make a copy of pre MC step positions in case MC step gets rejected
     std::vector<double> positionsPreMCStep(positions);
@@ -80,8 +87,8 @@ void MDRun::performMetropolisStep(std::vector<double> &positions, std::vector<do
     //Random number generator with two rvars
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<double> testProb(0,1);
-    std::uniform_real_distribution<double> stepScale(-1,1);
+    std::uniform_real_distribution<double> testProb(0, 1);
+    std::uniform_real_distribution<double> stepScale(-1, 1);
 
     //For metropolis we have to compute y = x_i + delta_r * step.
     //random Number between -1 and 1
@@ -91,32 +98,36 @@ void MDRun::performMetropolisStep(std::vector<double> &positions, std::vector<do
 
     //Compute potential energy post MC step
     PeriodicBoundaryConditions::recenterAtoms(par.numberAtoms, positions, par.boxSize);
-    forceCalculator.calculate(positions, forces) ;
+    forceCalculator.calculate(positions, forces);
     double potentialEnergyPostMCStep = forceCalculator.getPotentialEnergy();
 
     //Compute energy difference
     deltaPotentialEnergy = potentialEnergyPostMCStep - potentialEnergyPreMCStep;
     //If energy has been reduced: Smooth sailing accepting step
     if (deltaPotentialEnergy <= 0) {
-      acceptNewConfiguration = true;
+        acceptNewConfiguration = true;
     }
-    //Hmm, energy has been increased: Play the casino
+        //Hmm, energy has been increased: Play the casino
     else {
-      //MC Metropolis test
-      //exTODO: What's the behavior if T = 0? -> Obviously nothing is moving at T = 0
-      double MCtest = std::exp(
-              -deltaPotentialEnergy / (boltzmannConstant *par.targetTemperature)); //WE assume that temperature is constant, so shouldn't be an issue.
-      acceptNewConfiguration = (MCtest > testProb(gen));
+        //MC Metropolis test
+        //exTODO: What's the behavior if T = 0? -> Obviously nothing is moving at T = 0
+        double MCtest = std::exp(
+                -deltaPotentialEnergy / (boltzmannConstant *
+                                         par.targetTemperature)); //WE assume that temperature is constant, so shouldn't be an issue.
+        acceptNewConfiguration = (MCtest > testProb(gen));
     }
     //We have an accepted configuration: Increase count and we're done
     if (acceptNewConfiguration) {
-      nrOfAcceptedConfigurations++;
+        nrOfAcceptedConfigurations++;
+        properties[2] = potentialEnergyPostMCStep;
     }
-    //This step didn't yield an accepted configuration: Increase count and restore positions
+        //This step didn't yield an accepted configuration: Increase count and restore positions
     else {
-      nrOfRejectedConfigurations++; // not needed if run as step in context of MDRun::run
-      positions = positionsPreMCStep;
+        nrOfRejectedConfigurations++; // not needed if run as step in context of MDRun::run
+        positions = positionsPreMCStep;
+
     }
+
     //Calculate running acceptance ratio so delta_r can be tuned for future runs
     double ratioOfAcceptedVsNotAccepted =
             nrOfAcceptedConfigurations / (nrOfAcceptedConfigurations + nrOfRejectedConfigurations);
@@ -131,11 +142,11 @@ void MDRun::performMetropolisStep(std::vector<double> &positions, std::vector<do
 
 
     if (!par.showDistributionInsteadOfCSV) {
-        std::cout << nstep << "," << properties[2] << "," << deltaPotentialEnergy << "," << par.delta_r << "," << ratioOfAcceptedVsNotAccepted << std::endl;
+        std::cout << nstep << "," << properties[2] << "," << deltaPotentialEnergy << "," << par.delta_r << ","
+                  << ratioOfAcceptedVsNotAccepted << std::endl;
 
     }
 }
-
 
 
 void MDRun::initializeVariables() {
@@ -253,8 +264,6 @@ double MDRun::computeVelocityScalingFactor() const {/* determine velocity scalin
     }
     return scal;
 }
-
-
 
 
 void MDRun::printOutputForStep(const std::vector<double> &positions, const std::vector<double> &velocities, int nstep,
