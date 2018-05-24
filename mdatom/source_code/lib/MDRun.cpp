@@ -27,6 +27,7 @@ void MDRun::run(std::vector<double> &x, std::vector<double> &v) {
     bool MConeParticleOnly = true; // This is a hack; needs proper parametrisation
 
     //Recenter atoms if necessary (e.g. if coords.inp has coordinates on the outside of our box)
+    //Not necessary for Leap-Frog, but whatever :)
     PeriodicBoundaryConditions::recenterAtoms(par.numberAtoms, x, par.boxSize);
     forceCalculator.calculate(x, v);
     properties[2] = forceCalculator.getPotentialEnergy();
