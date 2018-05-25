@@ -24,7 +24,7 @@ void MDRun::run(std::vector<double> &x, std::vector<double> &v) {
     //output.printInitialTemperature(properties[1] / fac);
     //output.printIterationStart();
 
-    bool MConeParticleOnly = false; // This is a hack; needs proper parametrisation
+    bool MConeParticleOnly = true; // This is a hack; needs proper parametrisation
 
     //Recenter atoms if necessary (e.g. if coords.inp has coordinates on the outside of our box)
     //Not necessary for Leap-Frog, but whatever :)
@@ -136,9 +136,9 @@ MDRun::performMetropolisStep(std::vector<double> &positions, std::vector<double>
     double ratioOfAcceptedVsNotAccepted =
             nrOfAcceptedConfigurations / (nrOfAcceptedConfigurations + nrOfRejectedConfigurations);
 
-    if (ratioOfAcceptedVsNotAccepted > 0.51) {
+    if (ratioOfAcceptedVsNotAccepted > 0.55) {
          r *= 1.01;
-     } else if (ratioOfAcceptedVsNotAccepted < 0.49) {
+     } else if (ratioOfAcceptedVsNotAccepted < 0.45) {
          r *= 0.99;
      }
 
