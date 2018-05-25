@@ -32,6 +32,7 @@ void MDRun::run(std::vector<double> &x, std::vector<double> &v) {
     forceCalculator.calculate(x, v);
     properties[2] = forceCalculator.getPotentialEnergy();
 
+    radialDistribution.addInstantaneousDistribution(forceCalculator.getInstantaneousRadialDistribution());
 
 
     /* dynamics step */
@@ -100,6 +101,8 @@ MDRun::performMetropolisStep(std::vector<double> &positions, std::vector<double>
     //Compute potential energy post MC step
     PeriodicBoundaryConditions::recenterAtoms(par.numberAtoms, positions, par.boxSize);
     forceCalculator.calculate(positions, forces);
+
+    radialDistribution.addInstantaneousDistribution(forceCalculator.getInstantaneousRadialDistribution());
     double potentialEnergyPostMCStep = forceCalculator.getPotentialEnergy();
 
     //Compute energy difference
