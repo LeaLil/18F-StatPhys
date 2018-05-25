@@ -24,7 +24,7 @@ void MDRun::run(std::vector<double> &x, std::vector<double> &v) {
     //output.printInitialTemperature(properties[1] / fac);
     //output.printIterationStart();
 
-    bool MConeParticleOnly = true; // This is a hack; needs proper parametrisation
+    bool MConeParticleOnly = false; // This is a hack; needs proper parametrisation
 
     //Recenter atoms if necessary (e.g. if coords.inp has coordinates on the outside of our box)
     //Not necessary for Leap-Frog, but whatever :)
@@ -33,7 +33,7 @@ void MDRun::run(std::vector<double> &x, std::vector<double> &v) {
     properties[2] = forceCalculator.getPotentialEnergy();
 
     radialDistribution.addInstantaneousDistribution(forceCalculator.getInstantaneousRadialDistribution());
-
+    r = par.delta_r;
 
     /* dynamics step */
     double time = par.initialTime;
@@ -136,17 +136,17 @@ MDRun::performMetropolisStep(std::vector<double> &positions, std::vector<double>
     double ratioOfAcceptedVsNotAccepted =
             nrOfAcceptedConfigurations / (nrOfAcceptedConfigurations + nrOfRejectedConfigurations);
 
-    // if (ratioOfAcceptedVsNotAccepted > 0.51) {
-    //     par.delta_r *= 1.01;
-    // } else if (ratioOfAcceptedVsNotAccepted < 0.49) {
-    //     par.delta_r *= 0.99;
-    // }
+    if (ratioOfAcceptedVsNotAccepted > 0.51) {
+         r *= 1.01;
+     } else if (ratioOfAcceptedVsNotAccepted < 0.49) {
+         r *= 0.99;
+     }
 
     // std::cout << "delta_r for next step : " << par.delta_r << std::endl;
 
 
     if (!par.showDistributionInsteadOfCSV) {
-        std::cout << nstep << "," << properties[2] << "," << deltaPotentialEnergy << "," << par.delta_r << ","
+        std::cout << nstep << "," << properties[2] << "," << deltaPotentialEnergy << "," << r << ","
                   << ratioOfAcceptedVsNotAccepted << std::endl;
 
     }

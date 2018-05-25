@@ -60,6 +60,7 @@ class MDRun {
     const double boltzmannConstant = 8.3144598e-3; // units: K^-1 ps^-2 u nm^2
     double nrOfAcceptedConfigurations = 0;
     double nrOfRejectedConfigurations = 0;
+    double r;
 
     float getRandomNumberForMetropolis() const;
 
